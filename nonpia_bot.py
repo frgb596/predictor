@@ -11,9 +11,14 @@ import hashlib
 import time
 import struct
 import hmac
+import asyncio
 from datetime import datetime, timezone, timedelta
 
-BOT_TOKEN = "YOUR_BOT_TOKEN_HERE"
+# ── LOAD ENVIRONMENT VARIABLES ──────────────────────────────
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
+if not BOT_TOKEN:
+    raise ValueError("❌ BOT_TOKEN environment variable not set! Set it in Railway dashboard.")
+
 PRIVILEGED_ROLES = {"owner", "founders", "founder", "admin", "administrator"}
 KEYS_FILE  = "keys.json"
 USERS_FILE = "users.json"
@@ -409,12 +414,11 @@ intents.members = True
 bot  = commands.Bot(command_prefix="!", intents=intents)
 tree = bot.tree
 
-import asyncio
-
 @bot.event
 async def on_ready():
     await tree.sync()
     print(f"[Nonpia] Online — {bot.user} | Commands synced.")
+    print(f"[Nonpia] Logged in successfully. Bot is ready.")
 
 # ── /link ─────────────────────────────────────────────────────────────────────
 
@@ -756,6 +760,17 @@ async def cmd_help(interaction: discord.Interaction):
                    "`/listkeys` — view all keys\n"
                    "`/userinfo user:` — inspect a member"),inline=False)
     embed.set_footer(text="Nonpia Predictor")
-    await interaction.response.send_message(embed=embed,ephemeral=True)
+    await interaction.response.send_message(embed=embed, ephemeral=True)
 
-bot.run(BOT_TOKEN)
+# ── ERROR HANDLING ────────────────────────────────────────────────────────────
+
+@bot.event
+async def on_command_error(ctx, error):
+    if isinstance(error, commands.CommandNotFound):
+        return
+    print(f"[Error] {error}")
+
+# ── RUN BOT ──────────────────────────────────────────────────────────────────
+
+if __name__ == "__main__":
+    bot.run(BOT_TOKEN)
