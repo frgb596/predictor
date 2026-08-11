@@ -14,12 +14,34 @@ import hmac
 import asyncio
 from datetime import datetime, timezone, timedelta
 
-
+# ── LOAD ENVIRONMENT VARIABLES ──────────────────────────────
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 if not BOT_TOKEN:
     raise ValueError("❌ BOT_TOKEN environment variable not set! Set it in Railway dashboard.")
 
-PRIVILEGED_ROLES = {"owner", "founders", "founder", "admin", "administrator"}
+# ── OWNER CONFIGURATION ──────────────────────────────────────
+# Only these Discord User IDs can generate keys and use admin commands
+OWNER_IDS = [
+    1462679216649666839,  # Owner 1
+    1489469164371312761,  # Owner 2
+]
+
+# Users with this role can also use admin commands
+ADMIN_ROLE_ID = 1515609398964129942
+
+def is_authorized(member: discord.Member) -> bool:
+    """Check if a member is authorized to use admin commands"""
+    # Check if user ID is in owner list
+    if member.id in OWNER_IDS:
+        return True
+    # Check if user has the admin role
+    if ADMIN_ROLE_ID:
+        for role in member.roles:
+            if role.id == ADMIN_ROLE_ID:
+                return True
+    return False
+
+# ── KEY SYSTEM CONFIG ────────────────────────────────────────
 KEYS_FILE  = "keys.json"
 USERS_FILE = "users.json"
 
@@ -31,6 +53,8 @@ KEY_TYPES = {
     "3days":    3,
 }
 
+# ── BLOXFLIP BYPASS HEADERS ───────────────────────────────────────────────────
+# Rotates real browser fingerprints to avoid detection
 
 _UA_POOL = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -75,7 +99,7 @@ async def _bloxflip_fetch(token: str, path: str) -> dict | None:
     timeout = aiohttp.ClientTimeout(total=12, connect=5)
     connector = aiohttp.TCPConnector(ssl=True, limit=10)
 
-   
+    # Try up to 3 times with different UA each attempt
     for attempt in range(3):
         try:
             headers["User-Agent"] = random.choice(_UA_POOL)
@@ -114,7 +138,7 @@ async def _fetch_live_game(token: str) -> dict | None:
         return None
     return data
 
-
+# ── JSON HELPERS ──────────────────────────────────────────────────────────────
 
 def load_json(path):
     if not os.path.exists(path):
@@ -126,10 +150,11 @@ def save_json(path, data):
     with open(path, "w") as f:
         json.dump(data, f, indent=2)
 
-
+# ── ROLE / KEY HELPERS ────────────────────────────────────────────────────────
 
 def has_privileged_role(member: discord.Member) -> bool:
-    return any(r.name.lower() in PRIVILEGED_ROLES for r in member.roles)
+    """Check if member has admin role or is an owner"""
+    return is_authorized(member)
 
 def generate_key(key_type: str) -> str:
     prefix_map = {
@@ -153,7 +178,7 @@ def is_key_expired(kd: dict) -> bool:
         return False
 
 def check_user_access(uid: str, member: discord.Member) -> tuple:
-    if has_privileged_role(member):
+    if is_authorized(member):
         return True, "privileged"
     users   = load_json(USERS_FILE)
     keys_db = load_json(KEYS_FILE)
@@ -172,7 +197,10 @@ def check_user_access(uid: str, member: discord.Member) -> tuple:
             return False, "expired"
     return True, "ok"
 
-
+# ═══════════════════════════════════════════════════════════════════════════════
+#  NONPIA GODMODE PREDICTION CORE v4
+#  Monte Carlo · Bayesian BP · CSP · Wave-Function Collapse · Heat Map · Fusion
+# ═══════════════════════════════════════════════════════════════════════════════
 
 GW, GH, GS = 5, 5, 25
 
@@ -376,7 +404,7 @@ ENGINES={
     "Neuralithm": engine_neuralithm,
 }
 
-
+# ── GRID RENDERER ─────────────────────────────────────────────────────────────
 
 def build_grid(picks,revealed):
     ps=set(picks); rs=set(revealed)
@@ -389,7 +417,7 @@ def build_grid(picks,revealed):
         rows.append("  ".join(cells))
     return "\n".join(rows)
 
-
+# ── PATTERN LABELS ────────────────────────────────────────────────────────────
 
 PAT_LABELS={
     "diagonal":"Diagonal","cross":"Cross Sweep","corner_first":"Corner First",
@@ -402,10 +430,12 @@ ENG_LABELS={
     "Neuralithm":"Neuralithm — 4-Layer Neural",
 }
 
+# ── BOT SETUP ─────────────────────────────────────────────────────────────────
 
+# Enable privileged intents (requires Discord Developer Portal setup)
 intents = discord.Intents.default()
-intents.members = True          
-intents.message_content = True 
+intents.members = True          # Requires Server Members Intent enabled
+intents.message_content = True  # Requires Message Content Intent enabled
 bot = commands.Bot(command_prefix="!", intents=intents)
 tree = bot.tree
 
@@ -414,15 +444,17 @@ async def on_ready():
     await tree.sync()
     print(f"[Nonpia] Online — {bot.user} | Commands synced.")
     print(f"[Nonpia] Logged in successfully. Bot is ready.")
+    print(f"[Nonpia] Owners: {OWNER_IDS}")
+    print(f"[Nonpia] Admin Role ID: {ADMIN_ROLE_ID}")
 
-
+# ── /link ─────────────────────────────────────────────────────────────────────
 
 @tree.command(name="link", description="Link your Bloxflip account with your app.rt token")
 @app_commands.describe(auth="Your Bloxflip app.rt cookie value")
 async def cmd_link(interaction: discord.Interaction, auth: str):
     await interaction.response.defer(ephemeral=True)
     uid     = str(interaction.user.id)
-    is_priv = has_privileged_role(interaction.user)
+    is_priv = is_authorized(interaction.user)
     users   = load_json(USERS_FILE)
     user    = users.get(uid, {})
 
@@ -434,6 +466,7 @@ async def cmd_link(interaction: discord.Interaction, auth: str):
         ), ephemeral=True)
         return
 
+    # Verify token live against Bloxflip
     await interaction.followup.send("🔄 Verifying your token against Bloxflip...", ephemeral=True)
     ok, result = await _verify_token(auth.strip())
 
@@ -461,7 +494,7 @@ async def cmd_link(interaction: discord.Interaction, auth: str):
     embed.set_footer(text="Nonpia Predictor")
     await interaction.followup.send(embed=embed, ephemeral=True)
 
-
+# ── /mines ────────────────────────────────────────────────────────────────────
 
 @tree.command(name="mines", description="Predict safe tiles for your live Bloxflip Mines game")
 @app_commands.describe(
@@ -548,9 +581,9 @@ async def cmd_mines(interaction: discord.Interaction, algo: str, mines: int = 3,
     embed.description = "Good luck on your Mines game, buddy 🤩"
     await interaction.followup.send(embed=embed, ephemeral=True)
 
+# ── /keygen ───────────────────────────────────────────────────────────────────
 
-
-@tree.command(name="keygen", description="Generate Nonpia keys [Owner/Founder/Admin only]")
+@tree.command(name="keygen", description="Generate Nonpia keys [Owners Only]")
 @app_commands.describe(key_type="Type of key", amount="How many (1–50)")
 @app_commands.choices(key_type=[
     app_commands.Choice(name="Lifetime ♾️",  value="lifetime"),
@@ -560,10 +593,14 @@ async def cmd_mines(interaction: discord.Interaction, algo: str, mines: int = 3,
     app_commands.Choice(name="3 Days ⏳",    value="3days"),
 ])
 async def cmd_keygen(interaction: discord.Interaction, key_type: str, amount: int = 1):
-    if not has_privileged_role(interaction.user):
+    if not is_authorized(interaction.user):
         await interaction.response.send_message(
-            "❌ Only **Owner**, **Founder**, or **Admin** roles can generate keys.", ephemeral=True)
+            "❌ Only **authorized owners** can generate keys.\n"
+            "If you should have access, contact an owner.",
+            ephemeral=True
+        )
         return
+    
     await interaction.response.defer(ephemeral=True)
     amount  = max(1, min(50, amount))
     keys_db = load_json(KEYS_FILE)
@@ -595,6 +632,7 @@ async def cmd_keygen(interaction: discord.Interaction, key_type: str, amount: in
     embed.set_footer(text="Nonpia Predictor — Distribute privately.")
     await interaction.followup.send(embed=embed, ephemeral=True)
 
+# ── /redeem ───────────────────────────────────────────────────────────────────
 
 @tree.command(name="redeem", description="Redeem a Nonpia access key")
 @app_commands.describe(key="Your Nonpia key")
@@ -628,13 +666,18 @@ async def cmd_redeem(interaction: discord.Interaction, key: str):
     embed.set_footer(text="Nonpia Predictor")
     await interaction.followup.send(embed=embed, ephemeral=True)
 
+# ── /revokekey ────────────────────────────────────────────────────────────────
 
-
-@tree.command(name="revokekey", description="Revoke a key [Owner/Founder/Admin only]")
+@tree.command(name="revokekey", description="Revoke a key [Owners Only]")
 @app_commands.describe(key="Key to revoke")
 async def cmd_revokekey(interaction: discord.Interaction, key: str):
-    if not has_privileged_role(interaction.user):
-        await interaction.response.send_message("❌ Requires Owner, Founder, or Admin role.", ephemeral=True); return
+    if not is_authorized(interaction.user):
+        await interaction.response.send_message(
+            "❌ Only **authorized owners** can revoke keys.",
+            ephemeral=True
+        )
+        return
+    
     await interaction.response.defer(ephemeral=True)
     keys_db = load_json(KEYS_FILE); key = key.strip()
     if key not in keys_db:
@@ -650,11 +693,17 @@ async def cmd_revokekey(interaction: discord.Interaction, key: str):
             users[ub]["key_valid"] = False; save_json(USERS_FILE, users)
     await interaction.followup.send("✅ Key revoked and user access removed.", ephemeral=True)
 
+# ── /listkeys ─────────────────────────────────────────────────────────────────
 
-@tree.command(name="listkeys", description="List all keys [Owner/Founder/Admin only]")
+@tree.command(name="listkeys", description="List all keys [Owners Only]")
 async def cmd_listkeys(interaction: discord.Interaction):
-    if not has_privileged_role(interaction.user):
-        await interaction.response.send_message("❌ Requires Owner, Founder, or Admin role.", ephemeral=True); return
+    if not is_authorized(interaction.user):
+        await interaction.response.send_message(
+            "❌ Only **authorized owners** can list keys.",
+            ephemeral=True
+        )
+        return
+    
     await interaction.response.defer(ephemeral=True)
     keys_db = load_json(KEYS_FILE)
     if not keys_db:
@@ -670,17 +719,17 @@ async def cmd_listkeys(interaction: discord.Interaction):
     embed.set_footer(text="Last 30 shown | Nonpia Predictor")
     await interaction.followup.send(embed=embed,ephemeral=True)
 
-
+# ── /status ───────────────────────────────────────────────────────────────────
 
 @tree.command(name="status", description="Check your Nonpia account status")
 async def cmd_status(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
     uid=str(interaction.user.id); users=load_json(USERS_FILE); keys_db=load_json(KEYS_FILE)
-    u=users.get(uid,{}); ip=has_privileged_role(interaction.user)
+    u=users.get(uid,{}); ip=is_authorized(interaction.user)
     embed=discord.Embed(title="Account Status",color=0x5865F2)
     embed.add_field(name="Key",       value="✅" if u.get("key_valid") or ip else "❌", inline=True)
     embed.add_field(name="Linked",    value="✅" if u.get("auth_token") else "❌",       inline=True)
-    embed.add_field(name="Tier",      value="👑 Privileged" if ip else "🔑 Key",         inline=True)
+    embed.add_field(name="Tier",      value="👑 Owner" if ip else "🔑 Key",         inline=True)
     if u.get("bf_username"):
         embed.add_field(name="Bloxflip", value=u["bf_username"], inline=True)
     if u.get("key") and u["key"] in keys_db:
@@ -692,18 +741,25 @@ async def cmd_status(interaction: discord.Interaction):
     embed.set_footer(text="Nonpia Predictor")
     await interaction.followup.send(embed=embed,ephemeral=True)
 
-@tree.command(name="userinfo", description="Inspect a user [Owner/Founder/Admin only]")
+# ── /userinfo ─────────────────────────────────────────────────────────────────
+
+@tree.command(name="userinfo", description="Inspect a user [Owners Only]")
 @app_commands.describe(user="Discord member to inspect")
 async def cmd_userinfo(interaction: discord.Interaction, user: discord.Member):
-    if not has_privileged_role(interaction.user):
-        await interaction.response.send_message("❌ Requires Owner, Founder, or Admin role.", ephemeral=True); return
+    if not is_authorized(interaction.user):
+        await interaction.response.send_message(
+            "❌ Only **authorized owners** can inspect users.",
+            ephemeral=True
+        )
+        return
+    
     await interaction.response.defer(ephemeral=True)
     uid=str(user.id); users=load_json(USERS_FILE); keys_db=load_json(KEYS_FILE)
-    d=users.get(uid,{}); ip=has_privileged_role(user)
+    d=users.get(uid,{}); ip=is_authorized(user)
     embed=discord.Embed(title=f"User — {user.display_name}",color=0x5865F2)
     embed.add_field(name="Key",        value="✅" if d.get("key_valid") or ip else "❌", inline=True)
     embed.add_field(name="Linked",     value="✅" if d.get("auth_token") else "❌",       inline=True)
-    embed.add_field(name="Privileged", value="👑 Yes" if ip else "No",                   inline=True)
+    embed.add_field(name="Owner",      value="👑 Yes" if ip else "No",                   inline=True)
     if d.get("bf_username"):
         embed.add_field(name="Bloxflip", value=d["bf_username"], inline=True)
     if d.get("key") and d["key"] in keys_db:
@@ -714,7 +770,7 @@ async def cmd_userinfo(interaction: discord.Interaction, user: discord.Member):
     embed.set_footer(text="Nonpia Predictor")
     await interaction.followup.send(embed=embed,ephemeral=True)
 
-
+# ── /guide ────────────────────────────────────────────────────────────────────
 
 @tree.command(name="guide", description="How to get your Bloxflip app.rt token")
 async def cmd_guide(interaction: discord.Interaction):
@@ -730,11 +786,11 @@ async def cmd_guide(interaction: discord.Interaction):
     embed.set_footer(text="Nonpia Predictor")
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
-
+# ── /help ─────────────────────────────────────────────────────────────────────
 
 @tree.command(name="help", description="Show all Nonpia Predictor commands")
 async def cmd_help(interaction: discord.Interaction):
-    ip=has_privileged_role(interaction.user)
+    ip=is_authorized(interaction.user)
     embed=discord.Embed(title="Nonpia Predictor",description="Bloxflip Mines live prediction suite.",color=0x5865F2)
     embed.add_field(name="Prediction",
         value="`/mines algo: mines: picks:` — predict safe tiles from your live game",inline=False)
@@ -744,15 +800,18 @@ async def cmd_help(interaction: discord.Interaction):
                "`/status` — check your account\n"
                "`/guide` — how to get your token"),inline=False)
     if ip:
-        embed.add_field(name="👑 Admin / Owner / Founder",
+        embed.add_field(name="👑 Owner Commands",
             value=("`/keygen key_type: amount:` — generate keys\n"
                    "`/revokekey key:` — revoke a key\n"
                    "`/listkeys` — view all keys\n"
                    "`/userinfo user:` — inspect a member"),inline=False)
+    else:
+        embed.add_field(name="🔒 Restricted",
+            value="Owner commands are only available to authorized users.",inline=False)
     embed.set_footer(text="Nonpia Predictor")
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
-
+# ── ERROR HANDLING ────────────────────────────────────────────────────────────
 
 @bot.event
 async def on_command_error(ctx, error):
@@ -760,7 +819,7 @@ async def on_command_error(ctx, error):
         return
     print(f"[Error] {error}")
 
-
+# ── RUN BOT ──────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     bot.run(BOT_TOKEN)
