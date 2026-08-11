@@ -1,0 +1,7 @@
+*.pyc
+__pycache__/
+keys.json
+users.json
+.env
+*.log
+.DS_Store
