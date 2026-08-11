@@ -14,34 +14,33 @@ import hmac
 import asyncio
 from datetime import datetime, timezone, timedelta
 
-# ── LOAD ENVIRONMENT VARIABLES ──────────────────────────────
+
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 if not BOT_TOKEN:
     raise ValueError("❌ BOT_TOKEN environment variable not set! Set it in Railway dashboard.")
 
-# ── OWNER CONFIGURATION ──────────────────────────────────────
-# Only these Discord User IDs can generate keys and use admin commands
+
 OWNER_IDS = [
-    1462679216649666839,  # Owner 1
-    1489469164371312761,  # Owner 2
+    1462679216649666839, 
+    1489469164371312761,  
 ]
 
-# Users with this role can also use admin commands
+
 ADMIN_ROLE_ID = 1515609398964129942
 
 def is_authorized(member: discord.Member) -> bool:
     """Check if a member is authorized to use admin commands"""
-    # Check if user ID is in owner list
+   
     if member.id in OWNER_IDS:
         return True
-    # Check if user has the admin role
+  
     if ADMIN_ROLE_ID:
         for role in member.roles:
             if role.id == ADMIN_ROLE_ID:
                 return True
     return False
 
-# ── KEY SYSTEM CONFIG ────────────────────────────────────────
+
 KEYS_FILE  = "keys.json"
 USERS_FILE = "users.json"
 
@@ -53,8 +52,7 @@ KEY_TYPES = {
     "3days":    3,
 }
 
-# ── BLOXFLIP BYPASS HEADERS ───────────────────────────────────────────────────
-# Rotates real browser fingerprints to avoid detection
+
 
 _UA_POOL = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -99,7 +97,6 @@ async def _bloxflip_fetch(token: str, path: str) -> dict | None:
     timeout = aiohttp.ClientTimeout(total=12, connect=5)
     connector = aiohttp.TCPConnector(ssl=True, limit=10)
 
-    # Try up to 3 times with different UA each attempt
     for attempt in range(3):
         try:
             headers["User-Agent"] = random.choice(_UA_POOL)
@@ -138,7 +135,7 @@ async def _fetch_live_game(token: str) -> dict | None:
         return None
     return data
 
-# ── JSON HELPERS ──────────────────────────────────────────────────────────────
+
 
 def load_json(path):
     if not os.path.exists(path):
@@ -150,7 +147,7 @@ def save_json(path, data):
     with open(path, "w") as f:
         json.dump(data, f, indent=2)
 
-# ── ROLE / KEY HELPERS ────────────────────────────────────────────────────────
+
 
 def has_privileged_role(member: discord.Member) -> bool:
     """Check if member has admin role or is an owner"""
@@ -197,10 +194,7 @@ def check_user_access(uid: str, member: discord.Member) -> tuple:
             return False, "expired"
     return True, "ok"
 
-# ═══════════════════════════════════════════════════════════════════════════════
-#  NONPIA GODMODE PREDICTION CORE v4
-#  Monte Carlo · Bayesian BP · CSP · Wave-Function Collapse · Heat Map · Fusion
-# ═══════════════════════════════════════════════════════════════════════════════
+
 
 GW, GH, GS = 5, 5, 25
 
@@ -404,7 +398,7 @@ ENGINES={
     "Neuralithm": engine_neuralithm,
 }
 
-# ── GRID RENDERER ─────────────────────────────────────────────────────────────
+
 
 def build_grid(picks,revealed):
     ps=set(picks); rs=set(revealed)
@@ -417,7 +411,6 @@ def build_grid(picks,revealed):
         rows.append("  ".join(cells))
     return "\n".join(rows)
 
-# ── PATTERN LABELS ────────────────────────────────────────────────────────────
 
 PAT_LABELS={
     "diagonal":"Diagonal","cross":"Cross Sweep","corner_first":"Corner First",
@@ -430,12 +423,12 @@ ENG_LABELS={
     "Neuralithm":"Neuralithm — 4-Layer Neural",
 }
 
-# ── BOT SETUP ─────────────────────────────────────────────────────────────────
 
-# Enable privileged intents (requires Discord Developer Portal setup)
+
+
 intents = discord.Intents.default()
-intents.members = True          # Requires Server Members Intent enabled
-intents.message_content = True  # Requires Message Content Intent enabled
+intents.members = True          
+intents.message_content = True  
 bot = commands.Bot(command_prefix="!", intents=intents)
 tree = bot.tree
 
@@ -447,7 +440,6 @@ async def on_ready():
     print(f"[Nonpia] Owners: {OWNER_IDS}")
     print(f"[Nonpia] Admin Role ID: {ADMIN_ROLE_ID}")
 
-# ── /link ─────────────────────────────────────────────────────────────────────
 
 @tree.command(name="link", description="Link your Bloxflip account with your app.rt token")
 @app_commands.describe(auth="Your Bloxflip app.rt cookie value")
@@ -466,7 +458,7 @@ async def cmd_link(interaction: discord.Interaction, auth: str):
         ), ephemeral=True)
         return
 
-    # Verify token live against Bloxflip
+    
     await interaction.followup.send("🔄 Verifying your token against Bloxflip...", ephemeral=True)
     ok, result = await _verify_token(auth.strip())
 
@@ -494,7 +486,7 @@ async def cmd_link(interaction: discord.Interaction, auth: str):
     embed.set_footer(text="Nonpia Predictor")
     await interaction.followup.send(embed=embed, ephemeral=True)
 
-# ── /mines ────────────────────────────────────────────────────────────────────
+
 
 @tree.command(name="mines", description="Predict safe tiles for your live Bloxflip Mines game")
 @app_commands.describe(
@@ -581,7 +573,6 @@ async def cmd_mines(interaction: discord.Interaction, algo: str, mines: int = 3,
     embed.description = "Good luck on your Mines game, buddy 🤩"
     await interaction.followup.send(embed=embed, ephemeral=True)
 
-# ── /keygen ───────────────────────────────────────────────────────────────────
 
 @tree.command(name="keygen", description="Generate Nonpia keys [Owners Only]")
 @app_commands.describe(key_type="Type of key", amount="How many (1–50)")
@@ -632,7 +623,6 @@ async def cmd_keygen(interaction: discord.Interaction, key_type: str, amount: in
     embed.set_footer(text="Nonpia Predictor — Distribute privately.")
     await interaction.followup.send(embed=embed, ephemeral=True)
 
-# ── /redeem ───────────────────────────────────────────────────────────────────
 
 @tree.command(name="redeem", description="Redeem a Nonpia access key")
 @app_commands.describe(key="Your Nonpia key")
@@ -666,7 +656,7 @@ async def cmd_redeem(interaction: discord.Interaction, key: str):
     embed.set_footer(text="Nonpia Predictor")
     await interaction.followup.send(embed=embed, ephemeral=True)
 
-# ── /revokekey ────────────────────────────────────────────────────────────────
+
 
 @tree.command(name="revokekey", description="Revoke a key [Owners Only]")
 @app_commands.describe(key="Key to revoke")
@@ -693,7 +683,7 @@ async def cmd_revokekey(interaction: discord.Interaction, key: str):
             users[ub]["key_valid"] = False; save_json(USERS_FILE, users)
     await interaction.followup.send("✅ Key revoked and user access removed.", ephemeral=True)
 
-# ── /listkeys ─────────────────────────────────────────────────────────────────
+
 
 @tree.command(name="listkeys", description="List all keys [Owners Only]")
 async def cmd_listkeys(interaction: discord.Interaction):
@@ -719,7 +709,7 @@ async def cmd_listkeys(interaction: discord.Interaction):
     embed.set_footer(text="Last 30 shown | Nonpia Predictor")
     await interaction.followup.send(embed=embed,ephemeral=True)
 
-# ── /status ───────────────────────────────────────────────────────────────────
+
 
 @tree.command(name="status", description="Check your Nonpia account status")
 async def cmd_status(interaction: discord.Interaction):
@@ -741,7 +731,7 @@ async def cmd_status(interaction: discord.Interaction):
     embed.set_footer(text="Nonpia Predictor")
     await interaction.followup.send(embed=embed,ephemeral=True)
 
-# ── /userinfo ─────────────────────────────────────────────────────────────────
+
 
 @tree.command(name="userinfo", description="Inspect a user [Owners Only]")
 @app_commands.describe(user="Discord member to inspect")
@@ -770,7 +760,7 @@ async def cmd_userinfo(interaction: discord.Interaction, user: discord.Member):
     embed.set_footer(text="Nonpia Predictor")
     await interaction.followup.send(embed=embed,ephemeral=True)
 
-# ── /guide ────────────────────────────────────────────────────────────────────
+
 
 @tree.command(name="guide", description="How to get your Bloxflip app.rt token")
 async def cmd_guide(interaction: discord.Interaction):
@@ -786,7 +776,7 @@ async def cmd_guide(interaction: discord.Interaction):
     embed.set_footer(text="Nonpia Predictor")
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
-# ── /help ─────────────────────────────────────────────────────────────────────
+
 
 @tree.command(name="help", description="Show all Nonpia Predictor commands")
 async def cmd_help(interaction: discord.Interaction):
@@ -811,7 +801,7 @@ async def cmd_help(interaction: discord.Interaction):
     embed.set_footer(text="Nonpia Predictor")
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
-# ── ERROR HANDLING ────────────────────────────────────────────────────────────
+
 
 @bot.event
 async def on_command_error(ctx, error):
@@ -819,7 +809,7 @@ async def on_command_error(ctx, error):
         return
     print(f"[Error] {error}")
 
-# ── RUN BOT ──────────────────────────────────────────────────────────────────
+
 
 if __name__ == "__main__":
     bot.run(BOT_TOKEN)
